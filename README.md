@@ -6,7 +6,7 @@
 
 Local-first hardened identity microservice. **Rust + Axum + SQLite**. Capstone rebuild of Day 1's AaaS for the 30 Services challenge.
 
-> **Docs:** [Interactive Architecture](aaas-v2.architecture.html) • [Spec + TDS](AaaS-v2.md) • [Operations](docs/4.%20Deep%20Dive/Operations.md) • [CodeTour](.tours/new-joiner-aaas-v2.tour) • [Sign-off](SIGNOFF.md)
+> **Docs:** [Interactive Architecture](aaas-v2.architecture.html) • [Spec + TDS](AaaS-v2.md) • [Operations](docs/4.%20Deep%20Dive/Operations.md) • [CodeTour](.tours/new-joiner-aaas-v2.tour) • [Sign-off](SIGNOFF.md) • [Showcase](SHOWCASE.md)
 
 ## Architecture — Interactive + Big Preview
 
