@@ -1,0 +1,7 @@
+target/
+data/
+secrets/
+.env
+.git/
+tmp-*.json
+tmp-*.txt

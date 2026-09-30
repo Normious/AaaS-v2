@@ -1,0 +1,6 @@
+/target/
+/data/*.db*
+/secrets/*.pem
+.env
+*.log
+.DS_Store

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "AaaS v2 — Hardened Identity Provider",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "request-path", "label": "Primary request path", "focus": ["clients", "routers", "gate", "handlers", "db"], "note": "Follow one authenticated request from the edge to durable state." },
+      { "id": "offline-verify", "label": "Offline sibling verify", "focus": ["keys", "siblings", "handlers"], "note": "Siblings verify EdDSA tokens with the public key only." },
+      { "id": "async-edge", "label": "Crypto, limits, mail", "focus": ["handlers", "crypto", "ratelimit", "email"], "note": "Side paths off the handlers: hashing, rate checks, emails." }
+    ]
+  },
+  "components": [
+    { "id": "clients", "type": "external", "label": "Clients + 30 services", "sublabel": "HTTPS JSON", "pos": [40, 300], "size": [140, 64] },
+    { "id": "routers", "type": "backend", "label": "Axum routers", "sublabel": "public + /me/*", "pos": [250, 300], "size": [130, 64] },
+    { "id": "gate", "type": "security", "label": "require_auth", "sublabel": "Bearer EdDSA", "pos": [450, 300], "size": [130, 64] },
+    { "id": "handlers", "type": "backend", "label": "Route handlers", "sublabel": "11 modules", "pos": [650, 300], "size": [130, 64] },
+    { "id": "db", "type": "database", "label": "SQLite", "sublabel": "WAL, sqlx pool", "pos": [850, 300], "size": [130, 64] },
+    { "id": "keys", "type": "security", "label": "Ed25519 keys", "sublabel": "PEM, read at boot", "pos": [650, 140], "size": [130, 64] },
+    { "id": "siblings", "type": "external", "label": "Sibling services", "sublabel": "offline verify", "pos": [1050, 300], "size": [140, 64] },
+    { "id": "crypto", "type": "backend", "label": "auth/ crypto", "sublabel": "Argon2id, TOTP", "pos": [650, 450], "size": [130, 64] },
+    { "id": "ratelimit", "type": "backend", "label": "Rate limiter", "sublabel": "token bucket", "pos": [450, 450], "size": [130, 64] },
+    { "id": "email", "type": "external", "label": "SMTP", "sublabel": "best-effort sends", "pos": [250, 450], "size": [130, 64] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "aaas-v2: static binary + distroless", "wraps": ["routers", "gate", "handlers", "db", "keys", "crypto", "ratelimit"] },
+    { "kind": "security-group", "label": "trust boundary: keys + gate", "wraps": ["gate", "keys"] }
+  ],
+  "connections": [
+    { "id": "clients-to-routers", "from": "clients", "to": "routers", "label": "HTTPS JSON", "variant": "emphasis" },
+    { "id": "routers-to-gate", "from": "routers", "to": "gate" },
+    { "id": "gate-to-handlers", "from": "gate", "to": "handlers", "label": "AuthContext", "variant": "security" },
+    { "id": "handlers-to-db", "from": "handlers", "to": "db", "label": "sqlx pool" },
+    { "id": "keys-to-handlers", "from": "keys", "to": "handlers", "label": "sign + verify", "variant": "security", "labelDy": 24 },
+    { "id": "keys-to-siblings", "from": "keys", "to": "siblings", "label": "public key only" },
+    { "id": "handlers-to-crypto", "from": "handlers", "to": "crypto", "label": "hash + codes", "labelAt": [760, 378] },
+    { "id": "handlers-to-ratelimit", "from": "handlers", "to": "ratelimit", "label": "check" },
+    { "id": "handlers-to-email", "from": "handlers", "to": "email", "label": "send links", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "via": [[715, 430], [315, 430]] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Request path", "items": ["Axum routers split public and /me/* traffic", "require_auth mints AuthContext from EdDSA Bearer tokens", "Handlers persist through a capped sqlx pool"] },
+    { "dot": "emerald", "title": "Crypto", "items": ["Argon2id passwords, TOTP 2FA plus backup codes", "Rotating refresh tokens with theft detection", "All opaque tokens stored as SHA-256 hashes"] },
+    { "dot": "rose", "title": "Security", "items": ["Siblings verify offline with the public key only", "Lockout plus per-IP and per-account rate limits", "Append-only audit log with request IDs"] }
+  ]
+}

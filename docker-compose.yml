@@ -1,0 +1,26 @@
+services:
+  aaas-v2:
+    build: .
+    container_name: aaas-v2
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - ENV=production
+      - PORT=3000
+      - DATABASE_URL=/data/aaas-v2.db
+      - RUST_LOG=info
+      - JWT_PRIVATE_KEY_PATH=/secrets/jwt-private.pem
+      - JWT_PUBLIC_KEY_PATH=/secrets/jwt-public.pem
+      - JWT_ISSUER=https://auth.yourdomain.com
+      - JWT_AUDIENCE=api.yourdomain.com
+    volumes:
+      - aaas_data:/data
+      - ./secrets:/secrets:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+volumes:
+  aaas_data:

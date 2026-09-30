@@ -1,0 +1,72 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "AaaS v2: New Joiner Tour",
+  "description": "Request path of the hardened Rust identity provider: boot, auth gate, login, refresh rotation, and the crypto underneath. 11 stops.",
+  "steps": [
+    {
+      "directory": "src",
+      "title": "Source Root",
+      "description": "Situation: all runtime code, 34 files. Mechanism: routes/ owns HTTP, auth/ owns pure crypto, db/ owns SQL — auth never touches HTTP or SQL. Implication: you can reason about security without reading handlers. Gotcha: request types live next to their handlers, not in models/."
+    },
+    {
+      "file": "src/main.rs",
+      "line": 27,
+      "title": "Boot Sequence",
+      "description": "Situation: the tokio entry point. Mechanism: config → sqlite pool → WAL/FK pragmas → applies migrations/0001_init.sql → loads Ed25519 keys → builds public + authenticated routers → serve. Implication: bad keys or DB path abort startup loudly instead of failing requests later. Gotcha: migrations run by splitting one SQL file on ';' — keep it a single idempotent file."
+    },
+    {
+      "file": "src/main.rs",
+      "line": 97,
+      "title": "Route Map",
+      "description": "Situation: every endpoint is wired here. Mechanism: public router (register/login/refresh/verify/password/email) merges with the authenticated router (/me/*, /auth/logout), which carries the require_auth layer. Implication: adding an endpoint means one line here plus a handler file. Gotcha: the layer applies to the whole authenticated router — a route placed in the wrong router is silently public or wrongly gated."
+    },
+    {
+      "file": "src/middleware/auth.rs",
+      "line": 19,
+      "title": "Auth Gate",
+      "description": "Situation: require_auth guards all /me/* routes. Mechanism: Bearer → EdDSA verify → AuthContext {user_id, session_id, scope} into request extensions. Implication: handlers never parse tokens; they read Extension<AuthContext>. Gotcha: scope==[2fa] challenge tokens are rejected here, so a 2FA challenge can never call normal APIs."
+    },
+    {
+      "file": "src/routes/login.rs",
+      "line": 24,
+      "title": "Login Flow",
+      "description": "Situation: the highest-risk handler. Mechanism: validate → rate-limit (IP + email) → lookup (dummy_verify on miss) → lockout check → Argon2id verify → active/verified checks → 2FA branch or session + token pair. Implication: ordering is the security model — limits before DB, lockout before verify. Gotcha: unverified users stop before any session row exists."
+    },
+    {
+      "file": "src/auth/password.rs",
+      "line": 9,
+      "title": "Argon2id Hashing",
+      "description": "Situation: password hashing with OWASP params from env. Mechanism: Params::new(memory, iterations, parallelism) + random salt → PHC string stored in one column. Implication: retuning costs zero code changes. Gotcha: verify_password parses stored hashes with Argon2::default() — params travel with the hash, so rotation is backward compatible."
+    },
+    {
+      "file": "src/auth/jwt.rs",
+      "line": 52,
+      "title": "EdDSA Minting",
+      "description": "Situation: short-lived access tokens. Mechanism: claims sub/sid/iss/aud/exp/iat/jti/scope, header kid=aaas-v2-ed25519, 5s leeway on verify. Implication: siblings verify offline with the public key — AaaS can be down and reads keep working. Gotcha: sid ties the stateless JWT to a revokable session row; jti reserves future revocation lists."
+    },
+    {
+      "file": "src/db/tokens.rs",
+      "line": 49,
+      "title": "Refresh Rotation (Read Carefully)",
+      "description": "Situation: rotate_refresh_token is the security heart. Mechanism: find-by-hash → used? then THEFT (revoke session, 401) → expired/dead? 401 → insert successor + mark predecessor used+replaced_by. Implication: a replayed token burns both attacker and victim sessions — theft gains nothing. Gotcha: the used_at check must come before expiry; reordering would mask theft as expiry."
+    },
+    {
+      "file": "src/error.rs",
+      "line": 10,
+      "title": "Uniform Errors",
+      "description": "Situation: AppError maps to HTTP. Mechanism: each variant fixes a status; 5xx bodies are always generic 'Internal server error' with server-side tracing::error!. Implication: clients match on status; no stack or SQL ever leaks. Gotcha: RateLimited is the only variant carrying extra JSON (retry_after_seconds)."
+    },
+    {
+      "file": "src/ratelimit/mod.rs",
+      "line": 28,
+      "title": "Token Bucket",
+      "description": "Situation: in-memory per-key buckets. Mechanism: lazy refill on check, ceil() wait on breach, background task prunes idle buckets every 5 min. Implication: restart-safe to lose (fail-open); persistent brute-force state lives in DB lockout counters instead. Gotcha: max_per_window=0 disables a check — used in tests, never in prod config."
+    },
+    {
+      "file": "migrations/0001_init.sql",
+      "line": 65,
+      "title": "Session + Token Tables",
+      "description": "Situation: the sessions/refresh_tokens schema starting here. Mechanism: sessions carry device/IP/revoke reason; refresh rows link session→user with used_at/replaced_by chain. Implication: the whole theft-detection story is readable in ~60 lines of DDL. Gotcha: audit_log FK is ON DELETE SET NULL — deleting a user keeps the trail. Next move: run cargo test, then trace POST /auth/register end to end."
+    }
+  ]
+}
